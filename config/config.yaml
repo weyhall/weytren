@@ -95,9 +95,11 @@ platforms:
       expected_domain: "zhihu.com"
 
     # ---- 科技垂类（补 frequency_words.txt 里企业/AI/芯片词组的弹药）----
-    - id: "36kr"
-      name: "36氪"
-      expected_domain: "36kr.com"
+    # ⚠️ 36kr 已于 2026-09-21 移除：newsnow 上游连续 500，换源替代
+    - id: "juejin"
+      name: "稀土掘金"
+      expected_domain: "juejin.cn"
+      # 备选：酷安 coolapk / coolapk.com（数码社区，更偏手机与硬件话题）
     - id: "ithome"
       name: "IT之家"
       expected_domain: "ithome.com"
@@ -119,9 +121,9 @@ platforms:
       expected_domain: "xueqiu.com"
     - id: "zaobao"
       name: "联合早报"
-      expected_domain: "zaobao.com.sg"
-      # ⚠️ expected_domain 同时校验 HTTPS + 域名，不匹配会整批丢弃该平台数据
-      #    若日志里出现该平台为空的警告，先把 expected_domain 留空验证实际域名
+      expected_domain: "zaochenbao.com"
+      # ✅ 2026-09-21 实跑修正：该源实际返回的链接域名是 www.zaochenbao.com
+      #    原填 zaobao.com.sg 导致整批数据被安全校验丢弃
 
 
 # ===============================================================
@@ -306,7 +308,8 @@ storage:
                                       # SQLite + HTML 报告按天累积，建议 30~90
 
   remote:
-    retention_days: 0                 # 远程保留天数（0=永久保留）
+    retention_days: 90                # 远程保留天数  ← 已改（原 0 = 永久保留）
+                                      # 实测约 671KB(热榜) + 290KB(RSS) /天，90 天约 84MB
 
     endpoint_url: ""                  # S3 兼容端点（R2 / OSS / COS / S3 / MinIO）
     bucket_name: ""                   # 存储桶名称
@@ -341,10 +344,12 @@ ai:
 
   max_tokens: 5000                    # 最大生成 token 数（API 不支持则设 0 禁用）
 
-  num_retries: 4                      # 失败重试次数
-  fallback_models: ["deepseek/deepseek-v4-flash"]
-                                      # 💡 主备都是同一家，对方整体限流时一样会失败
-                                      #    有条件建议跨商回退，如加一个 openai/gpt-4o-mini
+  num_retries: 4                      # 失败重试次数（限流多为瞬时，重试可绕过）
+
+  fallback_models: []                 # ✅ 已清空（原为 deepseek/deepseek-v4-flash）
+                                      # 实际用的是 env 里的 openai/glm-4.7-flash + 自定义端点，
+                                      # 回退到 DeepSeek 会拿 GLM 的 key 去打 DeepSeek，必然鉴权失败
+                                      # 如需回退，填同一端点下的另一个模型名
 
   # extra_params:
   #   top_p: 1.0

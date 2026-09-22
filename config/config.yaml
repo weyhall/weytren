@@ -39,15 +39,32 @@ app:
 # 预设模板：always_on / morning_evening / office_hours / night_owl / custom
 # 详细时间线图请查看 config/timeline.yaml
 #
-# 💡 当前是关闭状态 + report.mode=current + new_items=false
-#    意味着：每次运行都重推当前在榜内容，长热榜会反复出现
-#    两个改法二选一（本文件未擅自改动）：
-#      A. enabled: true → 交给 timeline 控制推送节奏
-#      B. report.mode: "incremental" → 只推新增，零重复
+# 💡 当前配置：schedule 已启用 + preset=morning_evening
+#    推送节奏由「cron 运行频率」和「timeline 时段」共同决定：
+#      - 全天默认段：按 cron 频率推送（现为每 2 小时一次）
+#      - 20:00~22:00 晚间汇总段：仅一次，推当日全部新闻（daily）
+#
+# ⚠️ 若要把全天段改成「只推新增」，需改 config/timeline.yaml：
+#    preset morning_evening 的 default.report_mode: "current" → "incremental"
 # ===============================================================
 schedule:
-  enabled: false                        # 是否启用调度系统（true=启用, false=关闭）
+  enabled: true                         # ✅ 已启用（2026-09-22）
+                                        # 由 timeline.yaml 决定各时段用什么模式
+                                        # morning_evening = 全天推送 + 20:00~22:00 晚间当日汇总
+
   preset: "morning_evening"             # 预设模板名称
+                                        # 全天段按 cron 每 2 小时推一次
+                                        # 晚间 20:00~22:00 汇总一次
+
+  # ⚠️ 重要：启用 schedule 后，report.mode 不再是最终生效值
+  #    实际模式由 timeline.yaml 里所处时段的 report_mode 决定：
+  #      - 全天默认段  → current（会重复推送长热点）
+  #      - 晚间汇总段  → daily
+  #    若要保住「零重复」，需把 timeline.yaml 中 preset morning_evening 的
+  #    default.report_mode 从 current 改为 incremental（改法见对话说明）
+  #
+  # ⚠️ cron 保持每小时：官方建议 GitHub Actions 间隔 ≥ 2 小时
+  #    20:00~22:00 这个窗口横跨 2 小时，1 小时粒度下被延迟跳过的风险较小
 
 
 # ===============================================================

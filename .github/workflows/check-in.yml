@@ -1,0 +1,122 @@
+name: Auto Check In
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  TrendRadar 自动签到 / Auto Check In
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  作用：
+#    crawler.yml 是「试用版」工作流，运行满 7 天后会自动
+#   执行 `gh workflow disable crawler.yml` 把抓取任务停掉。
+#    本工作流每周一来「续期」一次，避免忘记签到导致静默停摆。
+#
+#  续期原理：
+#    查看 crawler.yml 源码可知，续期判断逻辑只有一句关键代码：
+#      if [ $DIFF_SECONDS -gt 604800 ]; then gh workflow disable ...
+#    即「距首次运行时间超过 7 天」才停用，且工作流「运行次数」
+#    本身并不会导致停用。
+#
+#    因此本工作流做两件事：
+#      1. 若 crawler 已被停用 → 重新启用（真正需要"抢救"的情况）
+#      2. 无论是否停用，都触发一次 crawler 运行，让"最近一次运行"
+#         保持新鲜，同时新数据照常入库
+#
+#  触发时间：
+#    每周一 01:00 UTC = 北京时间 每周一 09:00
+#    （即 09-28、10-05、10-12 …… 每周一上午）
+#
+#  为什么是每 7 天检查一次：
+#    crawler.yml 的试用期是 7 天。每周检查一次，即使某周恰好
+#    落在临界点，也有约 24 小时缓冲。若想更保险，把 cron 改成
+#    每天一次："0 1 * * *"
+# ══════════════════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    # 每周一 01:00 UTC（北京时间 09:00）
+    - cron: "0 1 * * 1"
+
+  workflow_dispatch:        # 支持手动触发
+
+concurrency:
+  group: auto-check-in
+  cancel-in-progress: false
+
+# 启用 / 触发工作流需要 actions: write 权限
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check and renew crawler workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          WORKFLOW_FILE="crawler.yml"
+          API_URL="repos/${REPO}/actions/workflows/${WORKFLOW_FILE}"
+
+          echo "════════════════════════════════════════════"
+          echo "📋 检查 crawler.yml 状态"
+          echo "════════════════════════════════════════════"
+
+          # 读取工作流状态（active / disabled_manually / disabled_inactivity）
+          STATE=$(gh api "$API_URL" --jq '.state')
+          echo "当前状态: $STATE"
+
+          # ── 第一步：被停用则重新启用 ──────────────────────────────
+          if [ "$STATE" != "active" ]; then
+            echo "⚠️  工作流处于停用状态（$STATE），正在启用..."
+            if gh workflow enable "$WORKFLOW_FILE"; then
+              echo "✅ 已成功启用 crawler.yml"
+            else
+              echo "❌ 启用失败，请检查 token 权限（需要 actions: write）"
+              exit 1
+            fi
+          else
+            echo "✅ 工作流处于启用状态，无需启用"
+          fi
+
+          # ── 第二步：计算距首次运行的天数（与 crawler.yml 同一套逻辑）──
+          RUNS_URL="${API_URL}/runs"
+          TOTAL=$(gh api "$RUNS_URL" --jq '.total_count')
+
+          if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
+            echo "ℹ️  尚无历史运行记录，直接触发一次运行"
+          else
+            LAST_PAGE=$(( (TOTAL + 99) / 100 ))
+            FIRST_RUN_DATE=$(gh api "${RUNS_URL}?per_page=100&page=${LAST_PAGE}" \
+              --jq '.workflow_runs[-1].created_at')
+            LAST_RUN_DATE=$(gh api "${RUNS_URL}?per_page=1" \
+              --jq '.workflow_runs[0].created_at')
+
+            if [ -n "$FIRST_RUN_DATE" ]; then
+              NOW_TS=$(date +%s)
+              FIRST_TS=$(date -d "$FIRST_RUN_DATE" +%s)
+              DIFF=$(( (NOW_TS - FIRST_TS) / 86400 ))
+              echo "首次运行: $FIRST_RUN_DATE（距今 ${DIFF} 天）"
+              if [ "$DIFF" -ge 7 ]; then
+                echo "⚠️  已超过 7 天，crawler 可能刚被自动停用（本步骤已尝试重新启用）"
+              fi
+            fi
+            echo "最近运行: $LAST_RUN_DATE"
+          fi
+
+          # ── 第三步：触发一次 crawler 运行 ────────────────────────
+          echo "────────────────────────────────────────────"
+          echo "🚀 触发一次 crawler.yml 运行..."
+          if gh workflow run "$WORKFLOW_FILE"; then
+            echo "✅ 已提交运行请求，稍后可在 Actions 页面查看结果"
+          else
+            echo "❌ 触发失败"
+            exit 1
+          fi
+
+          echo "════════════════════════════════════════════"
+          echo "🎉 续期完成，crawler.yml 已保持可用"
+          echo "════════════════════════════════════════════"

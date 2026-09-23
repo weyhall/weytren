@@ -75,7 +75,7 @@ schedule:
 # ===============================================================
 platforms:
   enabled: true                         # 是否启用热榜平台抓取（true=启用, false=关闭）
-  api_url: ""                            # 热榜数据 API 地址（留空使用默认地址）
+  api_url: "https://news.1007.us.ci/api/s"                            # 热榜数据 API 地址（留空使用默认地址）
   sources:
     - id: "toutiao"
       name: "今日头条"

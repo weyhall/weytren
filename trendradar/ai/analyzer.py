@@ -621,12 +621,25 @@ class AIAnalyzer:
             return result
 
         # 解析成功，提取字段
+        # 小模型偶发把正文字段返回成嵌套 dict/list，统一转成文本，防止下游 .strip() 崩溃
+        def _as_text(value):
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                return value
+            if isinstance(value, (dict, list)):
+                try:
+                    return json.dumps(value, ensure_ascii=False)
+                except Exception:
+                    return str(value)
+            return str(value)
+
         try:
-            result.core_trends = data.get("core_trends", "")
-            result.sentiment_controversy = data.get("sentiment_controversy", "")
-            result.signals = data.get("signals", "")
-            result.rss_insights = data.get("rss_insights", "")
-            result.outlook_strategy = data.get("outlook_strategy", "")
+            result.core_trends = _as_text(data.get("core_trends", ""))
+            result.sentiment_controversy = _as_text(data.get("sentiment_controversy", ""))
+            result.signals = _as_text(data.get("signals", ""))
+            result.rss_insights = _as_text(data.get("rss_insights", ""))
+            result.outlook_strategy = _as_text(data.get("outlook_strategy", ""))
 
             # 解析独立展示区概括
             summaries = data.get("standalone_summaries", {})

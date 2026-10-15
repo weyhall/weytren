@@ -24,7 +24,14 @@ def _format_list_content(text: str) -> str:
     """
     if not text:
         return ""
-    
+    # 防御：上游偶发传入非字符串（如 AI 返回嵌套结构），先转成文本再处理
+    if not isinstance(text, str):
+        try:
+            import json as _json
+            text = _json.dumps(text, ensure_ascii=False) if isinstance(text, (dict, list)) else str(text)
+        except Exception:
+            text = str(text)
+
     # 去除首尾空白，防止 AI 返回的内容开头就有换行导致显示空行
     text = text.strip()
 

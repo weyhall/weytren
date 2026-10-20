@@ -448,6 +448,19 @@ def count_word_frequency(
             ),
         )
 
+        # 跨平台去重：同一条新闻常被多个平台同时收录（如"董明珠称格力技工学校禁止谈恋爱"
+        # 同时出现在 baidu/toutiao/weibo），原实现只在 platform 模式下按平台去重，
+        # keyword 模式下会重复推送。此处在按权重排序后去重，保留热度最高的那条。
+        deduped_titles = []
+        seen_title_texts = set()
+        for title_data in sorted_titles:
+            title_text = title_data["title"]
+            if title_text in seen_title_texts:
+                continue
+            seen_title_texts.add(title_text)
+            deduped_titles.append(title_data)
+        sorted_titles = deduped_titles
+
         # 应用最大显示数量限制（优先级：单独配置 > 全局配置）
         group_max_count = group_key_to_max_count.get(group_key, 0)
         if group_max_count == 0:
@@ -677,6 +690,17 @@ def count_rss_frequency(
             data["titles"],
             key=lambda x: x["ranks"][0] if x["ranks"] else 999
         )
+
+        # 跨来源去重：同一条新闻可能被多个来源同时收录
+        deduped_titles = []
+        seen_title_texts = set()
+        for title_data in sorted_titles:
+            title_text = title_data["title"]
+            if title_text in seen_title_texts:
+                continue
+            seen_title_texts.add(title_text)
+            deduped_titles.append(title_data)
+        sorted_titles = deduped_titles
 
         # 应用最大显示数量限制
         group_max_count = group_key_to_max_count.get(group_key, 0)
